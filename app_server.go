@@ -290,6 +290,17 @@ func (c *appServerClient) handleNotification(method string, raw json.RawMessage)
 			c.recordThreadTurn(threadID, payload.TurnID)
 			c.store.updateActiveTurn(sessionID, payload.TurnID)
 			c.store.appendEvent(sessionID, "status", "turn started", "")
+			if c.store.stopRequested(sessionID) {
+				go func(sessionID string) {
+					ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+					defer cancel()
+					if err := c.InterruptTurn(ctx, sessionID); err != nil {
+						log.Printf("auto interrupt failed for session %s: %v", sessionID, err)
+						return
+					}
+					c.store.appendEvent(sessionID, "status", "turn interrupted", "stop request applied")
+				}(sessionID)
+			}
 		}
 	case "item/started":
 		c.handleItemStarted(payload)

@@ -190,14 +190,24 @@ func (s *sessionStore) stopActiveTask(sessionID string) (bool, error) {
 	if s.app == nil {
 		return false, errors.New("codex app-server is not available")
 	}
-	if s.activeTaskID(sessionID) == "" {
+	session := s.cloneSession(sessionID)
+	if session == nil {
+		return false, errors.New("session not found")
+	}
+	if strings.TrimSpace(session.ActiveTaskID) == "" {
 		return false, nil
+	}
+	if strings.TrimSpace(session.ActiveTurnID) == "" {
+		s.markStopRequested(sessionID, true)
+		s.appendEvent(sessionID, "status", "stop requested", "waiting for active turn")
+		return true, nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	if err := s.app.InterruptTurn(ctx, sessionID); err != nil {
 		return false, err
 	}
+	s.markStopRequested(sessionID, true)
 	s.appendEvent(sessionID, "status", "turn interrupted", "")
 	return true, nil
 }
@@ -508,6 +518,7 @@ func (s *sessionStore) finishTaskOK(sessionID, taskID string) {
 	if ok && rt.session.ActiveTaskID == taskID {
 		rt.session.ActiveTaskID = ""
 		rt.session.ActiveTurnID = ""
+		rt.stopRequested = false
 		rt.session.UpdatedAt = time.Now()
 		if err := s.saveLocked(rt.session); err != nil {
 			log.Printf("save completed task: %v", err)
@@ -539,6 +550,7 @@ func (s *sessionStore) finishTaskWithError(sessionID, taskID string, err error) 
 	if ok && rt.session.ActiveTaskID == taskID {
 		rt.session.ActiveTaskID = ""
 		rt.session.ActiveTurnID = ""
+		rt.stopRequested = false
 		rt.session.UpdatedAt = time.Now()
 		if saveErr := s.saveLocked(rt.session); saveErr != nil {
 			log.Printf("save failed task: %v", saveErr)
@@ -682,6 +694,28 @@ func (s *sessionStore) updateActiveTurn(sessionID, turnID string) {
 	}
 }
 
+func (s *sessionStore) markStopRequested(sessionID string, requested bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	rt, ok := s.sessions[sessionID]
+	if !ok {
+		return
+	}
+	rt.stopRequested = requested
+}
+
+func (s *sessionStore) stopRequested(sessionID string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	rt, ok := s.sessions[sessionID]
+	if !ok {
+		return false
+	}
+	return rt.stopRequested
+}
+
 func (s *sessionStore) deleteSession(sessionID string) (bool, error) {
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID == "" {
@@ -753,9 +787,13 @@ func (s *sessionStore) listSessions() []sessionSummary {
 			MessageCount: len(session.Messages),
 			Running:      session.ActiveTaskID != "",
 		}
-		if n := len(session.Messages); n > 0 {
-			last := strings.TrimSpace(session.Messages[n-1].Content)
-			summary.LastMessage = compactForSummary(last)
+		for i := len(session.Messages) - 1; i >= 0; i-- {
+			msg := session.Messages[i]
+			if strings.TrimSpace(msg.Role) != "user" {
+				continue
+			}
+			summary.LastMessage = compactForSummary(strings.TrimSpace(msg.Content))
+			break
 		}
 		for i := len(session.Events) - 1; i >= 0; i-- {
 			event := session.Events[i]

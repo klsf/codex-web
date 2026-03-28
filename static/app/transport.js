@@ -1,4 +1,19 @@
-async function createSession(workdir) {
+function ensureSocket() {
+  clearTimeout(reconnectTimer);
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+  if (ws) {
+    wsIntentionalClose = true;
+    try {
+      ws.close();
+    } catch (err) {}
+    ws = null;
+  }
+  connect();
+}
+
+async function createSession(workdir, connectNow) {
   var res = await fetch("/api/session/new", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -11,18 +26,22 @@ async function createSession(workdir) {
   setSession(data.sessionId);
   replaceTimeline([], []);
   setTaskState(false);
-  footerState.textContent = "ready";
-  footerDetail.textContent = "等待输入";
+  setFooterStatus("ready", "等待输入");
   scheduleStatusRefresh(0);
   if (ws) {
+    var current = ws;
+    ws = null;
     wsIntentionalClose = true;
-    ws.close();
+    current.close();
+  }
+  if (connectNow !== false) {
+    ensureSocket();
   }
 }
 
 async function submitPrompt(raw) {
   var content = (raw == null ? input.value : raw).trim();
-  if ((!content && !pendingImages.length) || !ws || ws.readyState !== WebSocket.OPEN) return;
+  if ((!content && !pendingImages.length) || !currentSessionId) return;
   var commandToken = commandQuery(content);
   var exactCommand = commands.find(function (item) {
     return item.name === commandToken || (item.aliases || []).includes(commandToken);
@@ -40,8 +59,9 @@ async function submitPrompt(raw) {
     formData.append("images", item.file, item.file.name);
   });
 
+  ensureSocket();
   setTaskState(true);
-  footerDetail.textContent = compact(content || "发送图片");
+  setFooterStatus("Working", compact(content || "发送图片"));
   ensureWorkingPlaceholder();
   try {
     var res = await fetch("/api/send", { method: "POST", body: formData });
@@ -209,9 +229,7 @@ function enterApp() {
   updateSendState();
   scheduleStatusRefresh(0);
   startStatusInterval();
-  if (!ws) {
-    connect();
-  }
+  ensureSocket();
 }
 
 async function openSessionChooser() {
@@ -308,16 +326,16 @@ async function switchSession(sessionId, connectNow) {
   autoResize();
   setTaskState(false);
   setSession(nextId);
-  footerState.textContent = "ready";
-  footerDetail.textContent = "已恢复会话 " + shortSession(nextId);
+  setFooterStatus("ready", "已恢复会话 " + shortSession(nextId));
   scheduleStatusRefresh(0);
+  if (ws) {
+    var current = ws;
+    ws = null;
+    wsIntentionalClose = true;
+    current.close();
+  }
   if (connectNow === false) {
     return;
   }
-  if (ws) {
-    wsIntentionalClose = true;
-    ws.close();
-    return;
-  }
-  connect();
+  ensureSocket();
 }

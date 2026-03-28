@@ -3,8 +3,7 @@ function setTransportState(state) {
   if (desktopTransportBadge) desktopTransportBadge.textContent = state;
   statusTransport.textContent = state;
   if (!isRunning) {
-    footerState.textContent = state === "connected" ? "ready" : state;
-    footerDetail.textContent = transportDetail(state);
+    setFooterStatus(state === "connected" ? "ready" : state, transportDetail(state));
   }
 }
 
@@ -158,13 +157,11 @@ function setTaskState(running) {
   updateSendState();
   statusTask.textContent = running ? "running" : "idle";
   if (running) {
-    footerState.textContent = "Working";
-    footerDetail.textContent = "Codex 正在执行任务，可输入 /stop 终止";
+    setFooterStatus("Working", "Codex 正在执行任务，可输入 /stop 终止");
     input.placeholder = "发送消息...";
     return;
   }
-  footerState.textContent = transportBadge.textContent === "connected" ? "ready" : transportBadge.textContent;
-  footerDetail.textContent = "等待输入";
+  setFooterStatus(transportBadge.textContent === "connected" ? "ready" : transportBadge.textContent, "等待输入");
   input.placeholder = "发送消息...";
 }
 
@@ -195,7 +192,12 @@ function autoResize() {
 function updateSendState() {
   var hasContent = String(input.value || "").trim().length > 0;
   var hasImages = pendingImages.length > 0;
-  sendBtn.disabled = isRunning || (!hasContent && !hasImages);
+  var commandToken = commandQuery(input.value || "");
+  var exactCommand = commands.find(function (item) {
+    return item.name === commandToken || (item.aliases || []).includes(commandToken);
+  });
+  var canSubmitWhileRunning = Boolean(exactCommand && exactCommand.name === "/stop");
+  sendBtn.disabled = (isRunning && !canSubmitWhileRunning) || (!hasContent && !hasImages);
 }
 
 function canAcceptImageFile(file) {
@@ -240,8 +242,7 @@ function applyBuildInfo() {
 
 function showError(message) {
   var text = compact(message || "操作失败");
-  footerState.textContent = "error";
-  footerDetail.textContent = text;
+  setFooterStatus("error", text);
   if (isCodexAuthError(text)) {
     showCodexAuthScreen("Codex CLI 授权已失效，请重新授权。");
   }
@@ -364,6 +365,33 @@ function scheduleStatusRefresh(delay) {
   }, delay == null ? 250 : delay);
 }
 
+function setFooterStatus(state, detail) {
+  renderFooterState(state);
+  if (detail != null) {
+    footerDetail.textContent = detail;
+  }
+}
+
+function renderFooterState(state) {
+  var text = String(state || "").trim() || "ready";
+  footerState.textContent = "";
+  footerState.classList.toggle("is-animated", text.toLowerCase() === "working");
+  if (text.toLowerCase() !== "working") {
+    footerState.textContent = text;
+    return;
+  }
+  var wrap = document.createElement("span");
+  wrap.className = "working-text working-marquee";
+  Array.from(text).forEach(function (char, index) {
+    var node = document.createElement("span");
+    node.className = "working-char";
+    node.style.animationDelay = (index * 0.12) + "s";
+    node.textContent = char;
+    wrap.appendChild(node);
+  });
+  footerState.appendChild(wrap);
+}
+
 function ensureWorkingPlaceholder() {
   return;
 }
@@ -380,10 +408,10 @@ function resumeSummary(item) {
   var parts = [];
   if (item.running) parts.push("运行中");
   parts.push(compact(item.workdir || "") || "无工作目录");
-  if (item.lastEvent) {
-    parts.push(compact(item.lastEvent));
-  } else if (item.lastMessage) {
+  if (item.lastMessage) {
     parts.push(compact(item.lastMessage));
+  } else if (item.lastEvent) {
+    parts.push(compact(item.lastEvent));
   } else {
     parts.push("无消息记录");
   }
@@ -397,11 +425,11 @@ function resumeWorkdir(item) {
 }
 
 function resumeActivity(item) {
-  if (item && item.lastEvent) {
-    return compact(item.lastEvent);
-  }
   if (item && item.lastMessage) {
     return compact(item.lastMessage);
+  }
+  if (item && item.lastEvent) {
+    return compact(item.lastEvent);
   }
   return "无消息记录";
 }

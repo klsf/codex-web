@@ -93,7 +93,7 @@ loginForm.addEventListener("submit", async function (evt) {
 newSessionChoice.addEventListener("click", async function () {
   try {
     resumeEmpty.hidden = true;
-    await createSession(workdirInput.value);
+    await createSession(workdirInput.value, false);
     enterApp();
   } catch (err) {
     resumeEmpty.hidden = false;

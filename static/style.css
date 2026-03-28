@@ -524,7 +524,6 @@ body.auth-required {
 
 .working-char {
   color: #5e6472;
-  animation: workingCharPulse 1.05s ease-in-out infinite;
 }
 
 .working-elapsed {
@@ -712,6 +711,21 @@ body.auth-required {
   }
 }
 
+@keyframes footerWorkingWave {
+  0% {
+    color: #5f6878;
+    text-shadow: none;
+  }
+  35% {
+    color: #eef3ff;
+    text-shadow: 0 0 10px rgba(157, 182, 255, 0.28);
+  }
+  100% {
+    color: #5f6878;
+    text-shadow: none;
+  }
+}
+
 .attachment-tray {
   display: none;
   gap: 10px;
@@ -723,7 +737,8 @@ body.auth-required {
 .command-palette {
   position: fixed;
   left: 50%;
-  bottom: calc(88px + env(safe-area-inset-bottom));
+  bottom: calc(126px + env(safe-area-inset-bottom));
+  z-index: 40;
   transform: translateX(-50%);
   width: min(420px, calc(100vw - 20px));
   max-height: min(280px, 42vh);
@@ -918,6 +933,19 @@ textarea {
   color: #dce4f8;
   font-weight: 700;
   flex: 0 0 auto;
+}
+
+#footerState.is-animated {
+  color: inherit;
+}
+
+#footerState .working-marquee {
+  gap: 0.01em;
+}
+
+#footerState .working-char {
+  color: #5f6878;
+  animation: footerWorkingWave 1.15s linear infinite;
 }
 
 #modelBadge,

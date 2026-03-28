@@ -63,8 +63,9 @@ type Session struct {
 }
 
 type sessionRuntime struct {
-	session *Session
-	clients map[*clientConn]struct{}
+	session       *Session
+	clients       map[*clientConn]struct{}
+	stopRequested bool
 }
 
 type clientConn struct {

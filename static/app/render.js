@@ -42,8 +42,7 @@ function renderMessage(message, options) {
   }
 
   if (settings.draft) {
-    footerState.textContent = "Working";
-    footerDetail.textContent = compact(message.content || "Codex 正在输出");
+    setFooterStatus("Working", compact(message.content || "Codex 正在输出"));
   } else if (message.role === "assistant") {
     removeWorkingPlaceholder();
   }

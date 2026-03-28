@@ -111,10 +111,15 @@ commands = [
     autoResize();
     if (ws) {
       var current = ws;
+      wsIntentionalClose = true;
       ws = null;
       current.close();
     }
+    clearTimeout(reconnectTimer);
+    localStorage.removeItem("codex_session_id");
+    currentSessionId = "";
     renderEmpty();
+    setFooterStatus("ready", "请选择新建会话或恢复会话");
     await openSessionChooser();
   }},
   { name: "/delete", aliases: [":delete"], description: "删除历史会话，或 /delete current 删除当前会话", action: async function () {
