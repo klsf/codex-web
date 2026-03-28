@@ -1,0 +1,24 @@
+# Binaries
+codex-web
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Logs
+*.log
+server.log
+
+# Runtime data
+data/sessions/*.json
+data/uploads/*
+!data/uploads/.gitkeep
+
+# Local backups
+backup_frontend_*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Codex Web</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
+</head>
+<body>
+  <section id="loginScreen" class="login-screen" hidden>
+    <form id="loginForm" class="login-card">
+      <div class="login-title">Codex Web</div>
+      <div class="login-version">v1.0.1</div>
+      <input id="passwordInput" class="login-input" type="password" placeholder="请输入密码" autocomplete="current-password">
+      <button id="loginButton" class="login-button" type="submit">登录</button>
+      <div id="loginError" class="login-error"></div>
+    </form>
+  </section>
+
+  <section id="sessionChooser" class="login-screen" hidden>
+    <div class="login-card chooser-card">
+      <div class="login-title">Codex Web</div>
+      <div class="login-version">v1.0.1</div>
+      <input id="workdirInput" class="login-input" type="text" placeholder="请输入工作目录，例如 /www/codex" value="/www/codex">
+      <div class="chooser-actions">
+        <button id="newSessionChoice" class="login-button" type="button">新建会话</button>
+        <button id="resumeSessionChoice" class="login-button login-button-secondary" type="button">恢复会话</button>
+      </div>
+      <div id="resumeList" class="resume-list" hidden></div>
+      <div id="resumeEmpty" class="login-error" hidden>没有可恢复的历史会话</div>
+    </div>
+  </section>
+
+  <div class="app-shell">
+    <aside class="desktop-sidebar">
+      <div class="sidebar-card">
+        <div class="sidebar-title">status</div>
+        <div id="statusPanel" class="status-panel">
+          <div class="status-row"><span class="status-key">session</span><span id="statusSession" class="status-value">-</span></div>
+          <div class="status-row"><span class="status-key">model</span><span id="statusModel" class="status-value">unknown</span></div>
+          <div class="status-row"><span class="status-key">cwd</span><span id="statusCwd" class="status-value">/</span></div>
+          <div class="status-row"><span class="status-key">transport</span><span id="statusTransport" class="status-value">connecting</span></div>
+          <div class="status-row"><span class="status-key">task</span><span id="statusTask" class="status-value">idle</span></div>
+          <div class="status-row"><span class="status-key">approvals</span><span id="statusApprovals" class="status-value">never</span></div>
+          <div class="status-row"><span class="status-key">fast</span><span id="statusFast" class="status-value">off</span></div>
+          <div class="status-row"><span class="status-key">service tier</span><span id="statusServiceTier" class="status-value">default</span></div>
+          <div class="status-row"><span class="status-key">plan</span><span id="statusPlan" class="status-value">-</span></div>
+          <div class="status-row"><span class="status-key">primary</span><span id="statusPrimary" class="status-value">-</span></div>
+          <div class="status-row"><span class="status-key">secondary</span><span id="statusSecondary" class="status-value">-</span></div>
+          <div class="status-row"><span class="status-key">credits</span><span id="statusCredits" class="status-value">-</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="phone-shell">
+      <header class="topbar">
+        <div class="title-stack">
+          <div class="page-title">Codex Web</div>
+          <div class="page-subtitle"><span id="sessionBadge">会话初始化中</span> · <span id="transportBadge">连接中</span> · <span class="page-version">v1.0.1</span></div>
+        </div>
+      </header>
+
+      <section id="timeline" class="timeline" aria-live="polite"></section>
+
+      <section id="attachmentTray" class="attachment-tray"></section>
+      <section id="commandPalette" class="command-palette" hidden></section>
+
+      <form id="composer" class="composer">
+        <textarea id="promptInput" rows="1" spellcheck="false" placeholder="发送消息或按住说话..."></textarea>
+        <input id="imageInput" type="file" accept="image/*" multiple hidden>
+        <button class="round-icon" type="button" id="imageBtn" aria-label="图片">◫</button>
+        <button class="round-icon" type="submit" id="sendBtn" aria-label="发送">↑</button>
+      </form>
+
+      <footer class="status-strip">
+        <span id="footerState">ready</span>
+        <span id="modelBadge">unknown</span>
+        <span id="cwdBadge">/</span>
+        <span id="footerDetail">waiting for input</span>
+      </footer>
+    </main>
+  </div>
+
+  <template id="messageTemplate">
+    <article class="bubble-row">
+      <div class="bubble-meta"></div>
+      <div class="bubble"></div>
+    </article>
+  </template>
+
+  <template id="attachmentTemplate">
+    <article class="attachment-chip">
+      <img class="attachment-thumb" alt="">
+      <button class="attachment-remove" type="button">×</button>
+    </article>
+  </template>
+
+  <script src="/app.js"></script>
+</body>
+</html>
