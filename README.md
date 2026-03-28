@@ -1,3 +1,7 @@
+<p align="right">
+  中文 | <a href="./README.en.md">English</a>
+</p>
+
 # codex-web
 
 `codex-web` 是一个基于 `Go + HTML + WebSocket` 的 Codex Web UI。
@@ -7,20 +11,25 @@
 - 浏览器关闭后，任务继续在服务端执行
 - 重新打开页面后，自动恢复最新聊天内容
 - 同一个会话会复用同一个 Codex thread，保留上下文
-- 支持移动端聊天界面，也支持桌面端左侧状态栏
+
+## 界面截图
+
+### 桌面端
+
+![桌面端截图](./screen1.png)
+
+### 移动端
+
+![移动端截图](./screen2.png)
 
 ## 特性
 
 - 基于 `codex app-server`，不是每条消息都重新跑一次独立 CLI
 - 会话持久化到 `data/sessions/*.json`
-- 浏览器本地保存 `sessionId`，下次打开优先回到上次会话
-- 登录保护，未登录时只显示密码页
-- 新建会话时可指定工作目录
 - 支持图片随消息一起发送
 - 支持流式输出、`Working...` 状态行、自动重连
-- 支持桌面端左侧状态栏，显示 `/status` 信息
 - 支持基础 Markdown 渲染
-- 前端静态资源内嵌进 Go 二进制，发布时不需要额外携带 `static/`
+- 前端静态资源内嵌进 Go 二进制
 
 ## 当前支持的命令
 
@@ -43,12 +52,10 @@
 1. Go `1.22+`
 2. 机器上可直接执行 `codex`
 3. 已完成 `codex login`
-4. `codex app-server` 可用
 
 ## 启动
 
 ```bash
-cd /www/codex
 go build -o codex-web .
 ./codex-web
 ```
@@ -101,7 +108,7 @@ http://你的服务器IP:991
 新建会话时可以输入工作目录，例如：
 
 ```text
-/www/codex
+/home/codex
 ```
 
 这个目录会按 session 保存，并影响：
@@ -115,17 +122,6 @@ http://你的服务器IP:991
 
 - 会话数据：`data/sessions/`
 - 上传图片：`data/uploads/`
-
-## 项目结构
-
-- [main.go](/www/codex/main.go)
-  Go 后端，负责 HTTP、WebSocket、会话存储、命令处理、`codex app-server` 通信
-- [static/index.html](/www/codex/static/index.html)
-  页面结构
-- [static/app.js](/www/codex/static/app.js)
-  前端交互、命令面板、流式渲染、登录流程
-- [static/style.css](/www/codex/static/style.css)
-  移动端和桌面端样式
 
 ## 反向代理
 
@@ -150,51 +146,3 @@ location / {
 ## License
 
 本项目使用 `MIT` 许可证，见 [LICENSE](/www/codex/LICENSE)。
-
-## English
-
-`codex-web` is a lightweight web UI for Codex built with `Go + HTML + WebSocket`.
-
-It is designed for both mobile and desktop browsers and focuses on resumable, long-lived Codex sessions:
-
-- tasks keep running on the server after the browser page is closed
-- reopening the page restores the latest chat content
-- the same session keeps the same Codex thread and conversation context
-- desktop layout includes a sidebar for status information
-
-### Highlights
-
-- powered by `codex app-server`
-- persistent sessions stored in `data/sessions/*.json`
-- browser-local `sessionId` restore
-- simple password-based login
-- per-session working directory
-- image upload with message send
-- streaming output and reconnect support
-- Markdown rendering for final assistant replies
-
-### Run
-
-```bash
-cd /www/codex
-go build -o codex-web .
-./codex-web
-```
-
-Default listen address:
-
-```text
-0.0.0.0:991
-```
-
-Default login password:
-
-```text
-codex
-```
-
-You can override it with:
-
-```bash
-./codex-web -password "your-password"
-```

@@ -304,6 +304,10 @@ body.auth-required {
   align-items: flex-start;
 }
 
+.bubble-row.is-event {
+  margin-bottom: 14px;
+}
+
 .bubble-meta {
   margin-bottom: 6px;
   color: var(--muted);
@@ -318,7 +322,8 @@ body.auth-required {
   max-width: 82%;
   padding: 13px 14px;
   border-radius: 16px;
-  line-height: 1.65;
+  font-size: 13px;
+  line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
   background: #141414;
@@ -340,7 +345,7 @@ body.auth-required {
 .role-assistant .bubble h4,
 .role-assistant .bubble h5,
 .role-assistant .bubble h6 {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   line-height: 1.35;
 }
 
@@ -350,16 +355,16 @@ body.auth-required {
 .role-assistant .bubble pre,
 .role-assistant .bubble blockquote,
 .role-assistant .bubble table {
-  margin: 0 0 12px;
+  margin: 0 0 9px;
 }
 
 .role-assistant .bubble ul,
 .role-assistant .bubble ol {
-  padding-left: 20px;
+  padding-left: 18px;
 }
 
 .role-assistant .bubble li + li {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .role-assistant .bubble code {
@@ -367,12 +372,12 @@ body.auth-required {
   border-radius: 6px;
   background: #141418;
   font-family: "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
-  font-size: 0.92em;
+  font-size: 0.88em;
 }
 
 .role-assistant .bubble pre {
   overflow-x: auto;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: 1px solid #202026;
   border-radius: 14px;
   background: #0f1013;
@@ -392,12 +397,12 @@ body.auth-required {
 .role-assistant .bubble table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .role-assistant .bubble th,
 .role-assistant .bubble td {
-  padding: 8px 10px;
+  padding: 7px 9px;
   border: 1px solid #23232a;
   text-align: left;
 }
@@ -449,6 +454,66 @@ body.auth-required {
   color: #d6d6da;
 }
 
+.bubble-row.is-event .bubble {
+  width: min(100%, 82%);
+  max-width: 100%;
+  padding: 12px 13px;
+  border-radius: 14px;
+  font-size: 12px;
+}
+
+.bubble-row.event-status .bubble {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.06);
+  color: #b8bdc9;
+}
+
+.bubble-row.event-command .bubble {
+  background: linear-gradient(180deg, rgba(15, 19, 27, 0.96) 0%, rgba(11, 14, 21, 0.96) 100%);
+  border-color: #263041;
+  color: #dde6f8;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.bubble-row.event-generic .bubble {
+  background: #151518;
+  border-color: #25252c;
+}
+
+.bubble-row.is-event .bubble-meta {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+}
+
+.event-title {
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.event-body {
+  margin-top: 7px;
+  color: #c2c7d2;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.event-body-command {
+  overflow-x: auto;
+  margin: 10px 0 0;
+  padding: 10px 11px;
+  border: 1px solid rgba(126, 162, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(4, 7, 12, 0.74);
+  color: #d7e4ff;
+  font-family: "SFMono-Regular", "JetBrains Mono", "Menlo", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
 @keyframes workingCharPulse {
   0% {
     color: #5e6472;
@@ -465,15 +530,38 @@ body.auth-required {
 }
 
 .attachment-tray {
-  position: fixed;
-  left: 50%;
-  bottom: calc(88px + env(safe-area-inset-bottom));
-  transform: translateX(-50%);
   display: none;
   gap: 10px;
-  width: min(420px, calc(100vw - 20px));
+  width: 100%;
   overflow-x: auto;
-  padding: 0 10px;
+  padding: 0 0 10px;
+}
+
+.working-dock {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  padding: 0 0 10px;
+  pointer-events: none;
+}
+
+.working-dock[hidden] {
+  display: none;
+}
+
+.working-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 100%;
+  padding: 9px 12px;
+  border: 1px solid #242833;
+  border-radius: 999px;
+  background: rgba(13, 15, 20, 0.92);
+  color: #c9d2e4;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(10px);
+  font-size: 12px;
 }
 
 .command-palette {
@@ -566,14 +654,20 @@ body.auth-required {
   left: 50%;
   bottom: calc(20px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: grid;
+  gap: 0;
   width: min(420px, calc(100vw - 20px));
   padding: 10px 12px;
   border: 1px solid #2b2b2f;
   border-radius: 18px;
   background: #121214;
+}
+
+.composer-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
 
 .round-icon {
@@ -699,7 +793,6 @@ textarea {
     flex-shrink: 0;
   }
 
-  .attachment-tray,
   .command-palette {
     width: min(760px, calc(100vw - 420px));
     max-width: calc(100% - 48px);
