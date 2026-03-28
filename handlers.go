@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -79,9 +82,133 @@ func (s *sessionStore) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 func (s *sessionStore) handleAppConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-	_, _ = w.Write([]byte("window.__APP_CONFIG = " + mustJSObject(map[string]string{
-		"version": strings.TrimSpace(appVersion),
+	_, _ = w.Write([]byte("window.__APP_CONFIG = " + mustJSObject(map[string]interface{}{
+		"version":        strings.TrimSpace(appVersion),
+		"authGuideSteps": authGuideSteps,
 	}) + ";\n"))
+}
+
+func (s *sessionStore) handleCodexAuthPage(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = w.Write([]byte(codexAuthPageHTML(
+		codexAuthReturnURL(r.URL.Query().Get("return")),
+		codexAuthForce(r.URL.Query().Get("force")),
+	)))
+}
+
+func (s *sessionStore) handleCodexAuthStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	writeJSON(w, s.auth.Status(codexAuthForce(r.URL.Query().Get("force"))))
+}
+
+func (s *sessionStore) handleCodexAuthStart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	writeJSON(w, s.auth.EnsureStarted(ctx, codexAuthForce(r.URL.Query().Get("force")), codexAuthRestart(r.URL.Query().Get("restart"))))
+}
+
+func (s *sessionStore) handleCodexAuthComplete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req codexAuthCompleteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json body", http.StatusBadRequest)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	s.auth.mu.Lock()
+	current := s.auth.session
+	s.auth.mu.Unlock()
+	if current == nil || strings.TrimSpace(req.SessionID) == "" || req.SessionID != current.ID {
+		log.Printf("auth complete rejected: session mismatch current=%v incoming=%q", current != nil, strings.TrimSpace(req.SessionID))
+		writeJSONStatus(w, http.StatusBadRequest, codexAuthStatusResponse{
+			LoggedIn: false,
+			Session: &codexAuthSession{
+				ID:     strings.TrimSpace(req.SessionID),
+				Status: "failed",
+				Error:  authStatusMessage("state mismatch"),
+			},
+		})
+		return
+	}
+	if parsed, err := url.Parse(strings.TrimSpace(req.CallbackURL)); err != nil || strings.TrimSpace(parsed.Query().Get("state")) == "" || strings.TrimSpace(parsed.Query().Get("state")) != current.State {
+		log.Printf("auth complete rejected: state mismatch session=%s", current.ID)
+		writeJSONStatus(w, http.StatusBadRequest, codexAuthStatusResponse{
+			LoggedIn: false,
+			Session: &codexAuthSession{
+				ID:     current.ID,
+				Status: "failed",
+				Error:  authStatusMessage("state mismatch"),
+			},
+		})
+		return
+	}
+	if err := completeCodexAuth(ctx, req.CallbackURL); err != nil {
+		log.Printf("auth complete failed: session=%s error=%v", current.ID, err)
+		s.auth.mu.Lock()
+		if s.auth.session != nil {
+			s.auth.session.Status = "failed"
+			s.auth.session.Error = authStatusMessage(err.Error())
+		}
+		s.auth.mu.Unlock()
+		writeJSONStatus(w, http.StatusBadRequest, s.auth.Status(true))
+		return
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if loggedIn, _ := codexLoginStatus(); loggedIn {
+			log.Printf("auth complete confirmed: session=%s", current.ID)
+			writeJSON(w, s.auth.Status(false))
+			return
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	log.Printf("auth complete pending after callback: session=%s", current.ID)
+	writeJSON(w, s.auth.Status(true))
+}
+
+func (s *sessionStore) handleCodexAuthCallback(w http.ResponseWriter, r *http.Request) {
+	target, err := url.Parse(codexAuthProxyTarget())
+	if err != nil {
+		http.Error(w, "invalid callback target", http.StatusInternalServerError)
+		return
+	}
+	proxyURL := *target
+	proxyURL.Path = "/auth/callback"
+	proxyURL.RawQuery = r.URL.RawQuery
+
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, proxyURL.String(), r.Body)
+	if err != nil {
+		http.Error(w, "build callback request failed", http.StatusBadGateway)
+		return
+	}
+	req.Header = r.Header.Clone()
+	req.Host = target.Host
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		http.Error(w, "codex login callback is not ready", http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	_, _ = io.Copy(w, resp.Body)
 }
 
 func (s *sessionStore) withAuth(next http.Handler) http.Handler {
@@ -328,13 +455,6 @@ func (s *sessionStore) handleCommand(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, map[string]bool{"ok": true})
-	case "/init":
-		path, created, err := s.initAgentsFile(req.Args)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		writeJSON(w, map[string]interface{}{"ok": true, "path": path, "created": created})
 	case "/model":
 		model, err := s.setModel(req.Args)
 		if err != nil {

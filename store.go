@@ -225,28 +225,6 @@ func (s *sessionStore) compactSession(sessionID string) (bool, error) {
 	return true, nil
 }
 
-func (s *sessionStore) initAgentsFile(args string) (string, bool, error) {
-	path := filepath.Join(defaultWorkdir, "AGENTS.md")
-	if _, err := os.Stat(path); err == nil {
-		return path, false, nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", false, err
-	}
-
-	content := "# AGENTS\n\n"
-	content += "## Project Notes\n\n"
-	content += "- Keep changes focused and minimal.\n"
-	content += "- Validate behavior before finishing.\n"
-	content += "- Preserve the existing mobile Codex web UX.\n"
-	if strings.TrimSpace(args) != "" {
-		content += "\n## User Instructions\n\n" + strings.TrimSpace(args) + "\n"
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return "", false, err
-	}
-	return path, true, nil
-}
-
 func (s *sessionStore) sessionWorkdir(sessionID string) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

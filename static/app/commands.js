@@ -23,19 +23,6 @@ commands = [
     }
     renderMessage({ id: "status-" + Date.now(), role: "system", content: lines.join("\n"), createdAt: new Date().toISOString() }, { animate: false });
   }},
-  { name: "/init", aliases: [":init"], description: "在工作目录创建 AGENTS.md", action: async function () {
-    var args = extractCommandArgs(input.value, ["/init", ":init"]);
-    hideCommandPalette();
-    var res = await fetch("/api/command", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId: currentSessionId, command: "/init", args: args }),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    var data = await res.json();
-    input.value = "";
-    renderMessage({ id: "init-" + Date.now(), role: "system", content: (data.created ? "created " : "exists ") + data.path, createdAt: new Date().toISOString() }, { animate: false });
-  }},
   { name: "/skills", aliases: [":skills"], description: "快速选择可用 skills", action: async function () {
     var args = extractCommandArgs(input.value, ["/skills", ":skills"]);
     if (!args) {

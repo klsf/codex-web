@@ -30,6 +30,7 @@ func main() {
 
 	store := &sessionStore{
 		sessions: make(map[string]*sessionRuntime),
+		auth:     newCodexAuthManager(),
 		meta: appMeta{
 			Model:          detectCodexModel(),
 			Cwd:            defaultWorkdir,
@@ -66,6 +67,8 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.FS(staticFS)))
 	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadsDir))))
+	mux.HandleFunc("/codex-auth", store.handleCodexAuthPage)
+	mux.HandleFunc("/auth/callback", store.handleCodexAuthCallback)
 	mux.HandleFunc("/app-config.js", store.handleAppConfig)
 	mux.HandleFunc("/ws", store.handleWS)
 	mux.HandleFunc("/api/login", store.handleLogin)
@@ -78,6 +81,9 @@ func main() {
 	mux.HandleFunc("/api/models", store.handleModels)
 	mux.HandleFunc("/api/skills", store.handleSkills)
 	mux.HandleFunc("/api/sessions", store.handleSessions)
+	mux.HandleFunc("/api/codex-auth/status", store.handleCodexAuthStatus)
+	mux.HandleFunc("/api/codex-auth/start", store.handleCodexAuthStart)
+	mux.HandleFunc("/api/codex-auth/complete", store.handleCodexAuthComplete)
 
 	server := &http.Server{
 		Addr:    addr,

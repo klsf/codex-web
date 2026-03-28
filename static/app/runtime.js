@@ -6,7 +6,6 @@ function setTransportState(state) {
     footerState.textContent = state === "connected" ? "ready" : state;
     footerDetail.textContent = transportDetail(state);
   }
-  scheduleStatusRefresh(0);
 }
 
 function showLoginScreen() {
@@ -14,6 +13,7 @@ function showLoginScreen() {
   document.body.classList.add("auth-required");
   loginScreen.hidden = false;
   sessionChooser.hidden = true;
+  codexAuthScreen.hidden = true;
   loginError.textContent = "";
   timeline.innerHTML = "";
   removeWorkingPlaceholder();
@@ -34,6 +34,7 @@ function hideLoginScreen() {
 function showSessionChooser() {
   document.body.classList.add("auth-required");
   sessionChooser.hidden = false;
+  codexAuthScreen.hidden = true;
   resumeList.hidden = true;
   resumeList.innerHTML = "";
   resumeEmpty.hidden = true;
@@ -47,6 +48,110 @@ function hideSessionChooser() {
   resumeEmpty.hidden = true;
 }
 
+function buildCodexAuthLink() {
+  return "/codex-auth?return=" + encodeURIComponent(window.location.href);
+}
+
+function authGuideStepsConfig() {
+  var config = window.__APP_CONFIG || {};
+  return Array.isArray(config.authGuideSteps) ? config.authGuideSteps : [];
+}
+
+async function submitCodexAuthCallback(callbackUrl) {
+  var res = await fetch("/api/codex-auth/complete", {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId: currentCodexAuthSessionId, callbackUrl: String(callbackUrl || "").trim() }),
+  });
+  var data = await res.json();
+  if (!res.ok && (!data || !data.session || !data.session.error)) {
+    throw new Error("提交回调链接失败");
+  }
+  return data;
+}
+
+async function openCodexAuthLink(force) {
+  var params = new URLSearchParams();
+  if (force) params.set("force", "1");
+  params.set("restart", "1");
+  var query = "?" + params.toString();
+  var res = await fetch("/api/codex-auth/start" + query, { method: "POST", credentials: "same-origin" });
+  var data = await res.json();
+  if (!res.ok) {
+    throw new Error((data && data.session && data.session.error) || "生成授权链接失败");
+  }
+  return data;
+}
+
+function renderAuthGuide(container, buttonId, buttonClass) {
+  if (!container) return;
+  var steps = authGuideStepsConfig();
+  container.innerHTML = "";
+  steps.forEach(function (text, index) {
+    var row = document.createElement("div");
+    row.className = "resume-item";
+    row.style.marginTop = index === 0 ? "12px" : "10px";
+    var buttonHtml = index === 0
+      ? '<div style="margin-top:10px;text-align:center"><button id="' + buttonId + '" class="' + buttonClass + '" type="button">打开授权页面</button></div>'
+      : "";
+    row.innerHTML = '<div class="resume-open" style="cursor:default">' +
+      '<div class="resume-item-title">步骤 ' + (index + 1) + '</div>' +
+      '<div class="resume-item-desc">' + text + '</div>' +
+      buttonHtml +
+      '</div>';
+    container.appendChild(row);
+  });
+}
+
+async function showCodexAuthScreen(message) {
+  document.body.classList.add("auth-required");
+  codexAuthScreen.hidden = false;
+  loginScreen.hidden = true;
+  sessionChooser.hidden = true;
+  currentCodexAuthSessionId = "";
+  renderAuthGuide(codexAuthSteps, "codexAuthLink", "login-button login-button-compact");
+  if (codexAuthInput) codexAuthInput.value = "";
+  codexAuthLink = document.getElementById("codexAuthLink");
+  if (codexAuthHint) {
+    codexAuthHint.textContent = "";
+  }
+  var status = await checkCodexAuthStatus().catch(function () { return null; });
+  if (status && status.loggedIn) {
+    if (codexAuthLink) {
+      codexAuthLink.disabled = true;
+      codexAuthLink.textContent = "当前设备已登录";
+    }
+    if (codexAuthHint) {
+      codexAuthHint.textContent = "";
+    }
+    return;
+  }
+  if (status && status.session) {
+    if (status.session.id) {
+      currentCodexAuthSessionId = status.session.id;
+    }
+    if (codexAuthHint && status.session.error) {
+      codexAuthHint.textContent = "";
+    }
+  }
+}
+
+function hideCodexAuthScreen() {
+  codexAuthScreen.hidden = true;
+}
+
+function isCodexAuthError(message) {
+  var text = String(message || "").toLowerCase();
+  return text.includes("not logged in") ||
+    text.includes("codex login") ||
+    text.includes("authentication") ||
+    text.includes("unauthorized") ||
+    text.includes("login required") ||
+    text.includes("logged out") ||
+    text.includes("expired");
+}
+
 function setTaskState(running) {
   isRunning = running;
   imageBtn.disabled = running;
@@ -56,13 +161,11 @@ function setTaskState(running) {
     footerState.textContent = "Working";
     footerDetail.textContent = "Codex 正在执行任务，可输入 /stop 终止";
     input.placeholder = "发送消息...";
-    scheduleStatusRefresh(0);
     return;
   }
   footerState.textContent = transportBadge.textContent === "connected" ? "ready" : transportBadge.textContent;
   footerDetail.textContent = "等待输入";
   input.placeholder = "发送消息...";
-  scheduleStatusRefresh(0);
 }
 
 function setSession(id) {
@@ -71,7 +174,6 @@ function setSession(id) {
   sessionBadge.textContent = id.slice(0, 8);
   if (desktopSessionBadge) desktopSessionBadge.textContent = id.slice(0, 8);
   statusSession.textContent = shortSession(id);
-  scheduleStatusRefresh(0);
 }
 
 function setMeta(meta) {
@@ -80,7 +182,9 @@ function setMeta(meta) {
   if (meta.cwd) cwdBadge.textContent = meta.cwd;
   if (meta.model) statusModel.textContent = meta.model;
   if (meta.cwd) statusCwd.textContent = meta.cwd;
-  scheduleStatusRefresh(0);
+  statusApprovals.textContent = meta.approvalPolicy || statusApprovals.textContent || "never";
+  statusFast.textContent = meta.fastMode ? "on" : "off";
+  statusServiceTier.textContent = meta.serviceTier || "default";
 }
 
 function autoResize() {
@@ -138,6 +242,9 @@ function showError(message) {
   var text = compact(message || "操作失败");
   footerState.textContent = "error";
   footerDetail.textContent = text;
+  if (isCodexAuthError(text)) {
+    showCodexAuthScreen("Codex CLI 授权已失效，请重新授权。");
+  }
   if (!errorToast) {
     return;
   }
@@ -239,6 +346,14 @@ async function refreshSidebarStatus() {
   }
   var data = await res.json();
   applyStatus(data);
+}
+
+async function checkCodexAuthStatus() {
+  var res = await fetch("/api/codex-auth/status", { credentials: "same-origin" });
+  if (!res.ok) {
+    throw new Error(await res.text());
+  }
+  return res.json();
 }
 
 function scheduleStatusRefresh(delay) {

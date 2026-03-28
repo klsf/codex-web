@@ -23,7 +23,7 @@ const (
 	appServerInitWait   = 15 * time.Second
 	appServerRPCTimeout = 30 * time.Second
 	authCookieName      = "codex_web_auth"
-	appVersion          = "1.0.3"
+	appVersion          = "1.0.4"
 )
 
 //go:embed static
@@ -77,6 +77,7 @@ type sessionStore struct {
 	sessions      map[string]*sessionRuntime
 	meta          appMeta
 	app           *appServerClient
+	auth          *codexAuthManager
 	maxConcurrent int
 	taskSlots     chan struct{}
 	authToken     string
@@ -157,6 +158,32 @@ type appMeta struct {
 	ApprovalPolicy string `json:"approvalPolicy"`
 	ServiceTier    string `json:"serviceTier,omitempty"`
 	FastMode       bool   `json:"fastMode"`
+}
+
+type codexAuthManager struct {
+	mu      sync.Mutex
+	session *codexAuthSession
+	proc    *exec.Cmd
+}
+
+type codexAuthSession struct {
+	ID        string    `json:"id"`
+	StartedAt time.Time `json:"startedAt"`
+	Status    string    `json:"status"`
+	AuthURL   string    `json:"authUrl,omitempty"`
+	Callback  string    `json:"callback,omitempty"`
+	State     string    `json:"state,omitempty"`
+	Error     string    `json:"error,omitempty"`
+}
+
+type codexAuthStatusResponse struct {
+	LoggedIn bool              `json:"loggedIn"`
+	Session  *codexAuthSession `json:"session,omitempty"`
+}
+
+type codexAuthCompleteRequest struct {
+	SessionID   string `json:"sessionId"`
+	CallbackURL string `json:"callbackUrl"`
 }
 
 type rpcPacket struct {

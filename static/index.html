@@ -35,6 +35,24 @@
     </div>
   </section>
 
+  <section id="codexAuthScreen" class="login-screen" hidden>
+    <div class="login-card chooser-card auth-card">
+      <div class="login-title">ChatGPT 账户验证</div>
+      <div class="login-version" data-version>vdev</div>
+      <div class="login-error" style="min-height:auto">当前机器上的 Codex CLI 尚未完成 ChatGPT 账户验证，或验证已失效。</div>
+      <div id="codexAuthSteps"></div>
+      <div class="resume-item" style="margin-top:12px">
+        <div class="resume-open" style="cursor:default">
+          <div class="resume-item-title">回调链接</div>
+          <textarea id="codexAuthInput" class="login-input login-textarea" rows="4" placeholder="示例: http://localhost:1455/auth/callback?code=...&scope=...&state=..."></textarea>
+          <div class="chooser-actions" style="margin-top:12px">
+            <button id="codexAuthComplete" class="login-button login-button-secondary" type="button">完成授权</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <div class="app-shell">
     <aside class="desktop-sidebar">
       <div class="sidebar-card">

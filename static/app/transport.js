@@ -13,7 +13,11 @@ async function createSession(workdir) {
   setTaskState(false);
   footerState.textContent = "ready";
   footerDetail.textContent = "等待输入";
-  if (ws) ws.close();
+  scheduleStatusRefresh(0);
+  if (ws) {
+    wsIntentionalClose = true;
+    ws.close();
+  }
 }
 
 async function submitPrompt(raw) {
@@ -61,20 +65,27 @@ function connect() {
   setTransportState("connecting");
 
   var protocol = location.protocol === "https:" ? "wss:" : "ws:";
+  wsIntentionalClose = false;
   ws = new WebSocket(protocol + "//" + location.host + "/ws");
+  var socket = ws;
 
-  ws.addEventListener("open", function () {
+  socket.addEventListener("open", function () {
+    if (ws !== socket) return;
+    wsIntentionalClose = false;
     setTransportState("connected");
-    ws.send(JSON.stringify({ type: "hello", sessionId: currentSessionId }));
+    socket.send(JSON.stringify({ type: "hello", sessionId: currentSessionId }));
+    scheduleStatusRefresh(0);
   });
 
-  ws.addEventListener("message", function (evt) {
+  socket.addEventListener("message", function (evt) {
+    if (ws !== socket) return;
     var data = JSON.parse(evt.data);
     if (data.type === "snapshot" && data.session) {
       setSession(data.session.id);
       setMeta(data.meta);
       replaceTimeline(data.session.messages || [], data.session.events || [], data.session.draftMessage || null);
       setTaskState(Boolean(data.running));
+      scheduleStatusRefresh(0);
       if (data.running && !data.session.draftMessage) {
         ensureWorkingPlaceholder();
       }
@@ -119,13 +130,21 @@ function connect() {
     }
   });
 
-  ws.addEventListener("close", function () {
+  socket.addEventListener("close", function () {
+    if (ws === socket) {
+      ws = null;
+    }
+    if (wsIntentionalClose) {
+      wsIntentionalClose = false;
+      return;
+    }
     setTransportState("reconnecting");
     showError("连接已断开，正在重连");
     reconnectTimer = setTimeout(connect, 1500);
   });
 
-  ws.addEventListener("error", function () {
+  socket.addEventListener("error", function () {
+    if (ws !== socket) return;
     setTransportState("error");
     showError("连接异常");
   });
@@ -160,6 +179,7 @@ async function logout() {
   if (ws) {
     var current = ws;
     ws = null;
+    wsIntentionalClose = true;
     current.close();
   }
   input.value = "";
@@ -183,12 +203,15 @@ function startStatusInterval() {
 function enterApp() {
   hideSessionChooser();
   hideLoginScreen();
+  hideCodexAuthScreen();
   autoResize();
   renderAttachmentTray();
   updateSendState();
   scheduleStatusRefresh(0);
   startStatusInterval();
-  connect();
+  if (!ws) {
+    connect();
+  }
 }
 
 async function openSessionChooser() {
@@ -209,6 +232,11 @@ async function boot() {
   var authenticated = await checkAuth().catch(function () { return false; });
   if (!authenticated) {
     showLoginScreen();
+    return;
+  }
+  var codexAuth = await checkCodexAuthStatus().catch(function () { return { loggedIn: true }; });
+  if (!codexAuth.loggedIn) {
+    showCodexAuthScreen("当前机器上的 Codex CLI 尚未授权，或授权已失效。");
     return;
   }
   var items = await fetchSessions().catch(function () { return []; });
@@ -282,10 +310,12 @@ async function switchSession(sessionId, connectNow) {
   setSession(nextId);
   footerState.textContent = "ready";
   footerDetail.textContent = "已恢复会话 " + shortSession(nextId);
+  scheduleStatusRefresh(0);
   if (connectNow === false) {
     return;
   }
   if (ws) {
+    wsIntentionalClose = true;
     ws.close();
     return;
   }
