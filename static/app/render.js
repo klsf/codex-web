@@ -1,450 +1,450 @@
-function renderMessage(message, options) {
-  var settings = Object.assign({ draft: false, animate: false }, options || {});
-  var key = messageKey(message, settings);
-  var node = findMessageNode(key);
-  if (!node && settings.draft) {
-    node = findDraftNode();
-  }
-  var isNew = !node;
+function appConfig() {
+  return window.__APP_CONFIG || {};
+}
 
+function availableProviders() {
+  return Array.isArray(appConfig().providers) ? appConfig().providers : [];
+}
+
+function providerDisplayName(providerID) {
+  var current = String(providerID || currentProvider || "").trim().toLowerCase();
+  var matched = availableProviders().find(function (item) {
+    return item && String(item.id || "").trim().toLowerCase() === current;
+  });
+  if (matched && matched.name) {
+    return String(matched.name).trim();
+  }
+  return current || "Claude";
+}
+
+function currentProviderConfig(providerID) {
+  var current = String(providerID || currentProvider || "").trim().toLowerCase();
+  return availableProviders().find(function (item) {
+    return item && String(item.id || "").trim().toLowerCase() === current;
+  }) || null;
+}
+
+function providerModels(providerID) {
+  var provider = currentProviderConfig(providerID);
+  return provider && Array.isArray(provider.models) ? provider.models.slice() : [];
+}
+
+function setNodeText(node, value) {
+  if (!node) return;
+  node.textContent = value;
+}
+
+function providerIcon(providerID) {
+  var id = String(providerID || "").trim().toLowerCase();
+  if (id === "claude") {
+    return '' +
+      '<svg viewBox="0 0 48 48" aria-hidden="true">' +
+        '<circle cx="24" cy="24" r="10"></circle>' +
+        '<path d="M24 5v7M24 36v7M5 24h7M36 24h7M11 11l5 5M32 32l5 5M11 37l5-5M32 16l5-5"></path>' +
+      '</svg>';
+  }
+  return '' +
+    '<svg viewBox="0 0 48 48" aria-hidden="true">' +
+      '<path d="M34 12c-2.5-3-6-4.5-10.5-4.5C14.4 7.5 8 13.7 8 24s6.4 16.5 15.5 16.5c4.5 0 8-1.5 10.5-4.5"></path>' +
+      '<path d="M30 16h8v16h-8"></path>' +
+      '<path d="M22 16a8 8 0 1 0 0 16"></path>' +
+    '</svg>';
+}
+
+function syncProviderPicker() {
+  return;
+}
+
+function setCurrentProvider(providerID) {
+  var nextProvider = String(providerID || "").trim().toLowerCase();
+  if (!nextProvider) return;
+  currentProvider = nextProvider;
+  syncProviderPicker();
+  syncChooserProviderPicker();
+  setNodeText(statusProvider, providerDisplayName(nextProvider));
+  populateModelSelect(nextProvider);
+}
+
+function populateProviderSelect() {
+  var items = availableProviders().filter(function (item) { return item; });
+  if (providerPickerChooser) {
+    providerPickerChooser.innerHTML = "";
+  }
+  items.forEach(function (item) {
+    if (providerPickerChooser) {
+      providerPickerChooser.appendChild(createProviderButton(item, false));
+    }
+  });
+  syncProviderPicker();
+  syncChooserProviderPicker();
+}
+
+function createProviderButton(item, switchNow) {
+  var button = document.createElement("button");
+  button.type = "button";
+  button.className = "provider-option";
+  button.dataset.providerId = item.id;
+  button.setAttribute("role", "radio");
+  button.setAttribute("aria-label", item.name || item.id);
+  button.innerHTML =
+    '<span class="provider-option-icon">' + providerIcon(item.id) + '</span>' +
+    '<span class="provider-option-name">' + (item.name || item.id) + '</span>';
+  button.addEventListener("click", function () {
+    setCurrentProvider(item.id);
+  });
+  return button;
+}
+
+function syncChooserProviderPicker() {
+  if (!providerPickerChooser) return;
+  Array.from(providerPickerChooser.querySelectorAll("[data-provider-id]")).forEach(function (button) {
+    var selected = String(button.dataset.providerId || "") === String(currentProvider || "");
+    button.classList.toggle("is-selected", selected);
+    button.setAttribute("aria-checked", selected ? "true" : "false");
+  });
+}
+
+function populateModelSelect(providerID, currentModel) {
+  if (!modelSelect) return;
+  var models = providerModels(providerID);
+  var selected = String(currentModel || modelSelect.value || "").trim();
+  if (selected && models.indexOf(selected) === -1) {
+    models.push(selected);
+  }
+  if (!models.length) {
+    models.push(String(appConfig().model || "unknown"));
+  }
+  modelSelect.innerHTML = "";
+  models.forEach(function (model) {
+    var option = document.createElement("option");
+    option.value = model;
+    option.textContent = model;
+    modelSelect.appendChild(option);
+  });
+  modelSelect.value = selected && models.indexOf(selected) !== -1 ? selected : models[0];
+}
+
+function formatTime(value) {
+  if (!value) return "--:--";
+  return new Date(value).toLocaleString("zh-CN", {
+    hour12: false,
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function shortSession(id) {
+  return id ? String(id).slice(0, 8) : "unknown";
+}
+
+function fullSession(id) {
+  return String(id || "").trim() || "unknown";
+}
+
+function compact(text) {
+  return String(text || "").replace(/\s+/g, " ").trim().slice(0, 120) || "等待输入";
+}
+
+function renderMarkdown(node, text) {
+  var bubble = node.querySelector(".bubble");
+  var source = String(text || "");
+  if (!window.marked || !window.DOMPurify) {
+    bubble.textContent = source;
+    return;
+  }
+  window.marked.setOptions({ breaks: true, gfm: true });
+  bubble.innerHTML = window.DOMPurify.sanitize(window.marked.parse(source));
+}
+
+function messageKey(message, draft) {
+  if (!message) return "";
+  if (draft) return String(message.id || "draft");
+  return String(message.id || [message.role, message.createdAt, message.content].join(":"));
+}
+
+function findMessageNode(id) {
+  return timeline.querySelector('.bubble-row[data-message-id="' + id + '"]');
+}
+
+function eventKey(event) {
+  if (!event) return "";
+  return "event-" + String(event.id || [event.kind, event.title, event.createdAt].join(":"));
+}
+
+function renderMessage(message, options) {
+  if (!message) return null;
+  var settings = options || {};
+  var key = messageKey(message, settings.draft);
+  var node = findMessageNode(key);
   if (!node) {
     node = template.content.firstElementChild.cloneNode(true);
     timeline.appendChild(node);
   }
   node.dataset.messageId = key;
-
-  node.classList.remove("role-user", "role-assistant", "role-system", "is-draft", "is-streaming", "is-working");
+  node.classList.remove("role-user", "role-assistant", "role-system", "is-draft");
   node.classList.add("role-" + message.role);
   if (settings.draft) {
     node.classList.add("is-draft");
-    node.classList.add("is-streaming");
-    activeDraftId = key;
-  } else if (activeDraftId === key || message.role === "assistant") {
-    activeDraftId = "";
   }
-
-  node.querySelector(".bubble-meta").textContent = metaForMessage(message);
+  node.querySelector(".bubble-meta").textContent = formatTime(message.createdAt);
   renderImages(node, message.imageUrls || []);
-
-  var bubble = node.querySelector(".bubble");
-  if (settings.draft) {
-    streamTo(node, message.content || "");
-  } else if (settings.animate && isNew) {
-    bubble.textContent = "";
-    revealBody(node, message.content || "", message.role === "assistant");
+  if (message.role === "assistant") {
+    renderMarkdown(node, message.content || "");
   } else {
-    stopStream(node);
-    if (shouldRenderMarkdown(message)) {
-      renderMarkdown(node, message.content || "");
-    } else if (bubble.textContent !== (message.content || "")) {
-      bubble.textContent = message.content || "";
-    }
+    node.querySelector(".bubble").textContent = message.content || "";
   }
-
-  if (settings.draft) {
-    setFooterStatus("Working", compact(message.content || (providerDisplayName() + " 正在输出")));
-  } else if (message.role === "assistant") {
-    removeWorkingPlaceholder();
-  }
+  node.querySelector(".bubble").hidden = !String(message.content || "").trim() && Array.isArray(message.imageUrls) && message.imageUrls.length > 0;
   scrollToBottom();
   return node;
 }
 
-function eventKey(event) {
-  return "event-" + String(event && event.id ? event.id : crypto.randomUUID());
-}
-
-function metaForEvent(event) {
-  var label = eventBadge(event);
-  var time = formatTime(event && event.createdAt);
-  return label ? label + " · " + time : time;
-}
-
-function eventBadge(event) {
-  var category = eventCategory(event);
-  var kind = String((event && event.kind) || "").toLowerCase();
-  if (category === "command" || kind === "command") {
-    if (eventStepType(event) === "shellcommand") return "shell";
-    return "tool";
-  }
-  if (category) {
-    return category;
-  }
-  if (kind === "status") {
-    return "status";
-  }
-  return kind || "event";
-}
-
-function eventBody(event) {
-  var parts = [];
-  var title = String((event && event.title) || "").trim();
-  var body = String((event && event.body) || "").trim();
-  if (title) parts.push(title);
-  if (body) parts.push(body);
-  return parts.join("\n\n");
-}
-
 function shouldHideEvent(event) {
-  var kind = String((event && event.kind) || "").toLowerCase();
-  var category = eventCategory(event);
-  var stepType = eventStepType(event);
-  var phase = String((event && event.phase) || "").toLowerCase();
-  if (kind === "command") {
-    return false;
-  }
-  if (category === "turn" || category === "task") {
+  if (!event) return true;
+  var stepType = normalizeEventToken(event.stepType);
+  var title = normalizeEventToken(event.title);
+  var target = normalizeEventToken(event.target);
+  if (stepType === "result") {
     return true;
   }
-  if (phase === "completed" || phase === "dequeued") {
+  if (stepType === "thread" || stepType === "turn" || title === "thread" || title === "turn") {
     return true;
   }
-  if (stepType === "reasoning" || stepType === "agentmessage" || stepType === "usermessage") {
+  if (target === "thread" || target === "turn") {
     return true;
   }
-  return false;
+  return !String(event.title || event.body || event.target || "").trim();
 }
 
-function renderEvent(event, options) {
-  if (!event) return null;
-  if (shouldHideEvent(event)) return null;
-  if (shouldGroupEvent(event)) {
-    return renderTraceEvent(event);
-  }
+function renderEvent(event) {
+  if (!event || shouldHideEvent(event)) return null;
   var key = eventKey(event);
   var node = findMessageNode(key);
   if (!node) {
     node = template.content.firstElementChild.cloneNode(true);
     timeline.appendChild(node);
   }
-
-  var kind = String(event.kind || "").toLowerCase();
   node.dataset.messageId = key;
-  node.classList.remove(
-    "role-user",
-    "role-assistant",
-    "role-system",
-    "is-draft",
-    "is-streaming",
-    "is-working",
-    "is-event",
-    "event-status",
-    "event-command",
-    "event-generic"
-  );
+  node.classList.remove("role-user", "role-assistant", "role-system", "is-event", "event-command", "event-status", "event-reasoning");
   node.classList.add("role-system", "is-event");
-  if (kind === "command") {
-    node.classList.add("event-command");
-  } else if (kind === "status") {
-    node.classList.add("event-status");
+  if (isReasoningEvent(event)) {
+    node.classList.add("event-reasoning");
   } else {
-    node.classList.add("event-generic");
+    node.classList.add(String(event.kind || "").toLowerCase() === "command" ? "event-command" : "event-status");
   }
+  node.querySelector(".bubble-meta").textContent = eventMeta(event);
 
-  node.querySelector(".bubble-meta").textContent = metaForEvent(event);
   var bubble = node.querySelector(".bubble");
-  var title = String(event.title || "").trim();
-  var body = String(event.body || "").trim();
   bubble.innerHTML = "";
+  bubble.classList.add("event-collapsible");
 
-  if (title) {
-    var titleEl = document.createElement("div");
-    titleEl.className = "event-title";
-    titleEl.textContent = title;
-    bubble.appendChild(titleEl);
+  var detailsNode = document.createElement("details");
+  detailsNode.className = "event-details";
+  var summaryNode = document.createElement("summary");
+  summaryNode.className = "event-summary";
+  var summaryTextNode = document.createElement("span");
+  summaryTextNode.className = "event-summary-text";
+  summaryTextNode.textContent = eventSummaryText(event);
+  summaryNode.appendChild(summaryTextNode);
+  detailsNode.appendChild(summaryNode);
+
+  var contentNode = document.createElement("div");
+  contentNode.className = "event-content";
+
+  if (event.title) {
+    var titleNode = document.createElement("div");
+    titleNode.className = "event-title";
+    titleNode.textContent = eventTitleText(event);
+    contentNode.appendChild(titleNode);
   }
-
-  if (body) {
-    if (kind === "command") {
-      renderCommandEventBody(bubble, body);
-    } else {
-      var bodyEl = document.createElement("div");
-      bodyEl.className = "event-body";
-      bodyEl.textContent = body;
-      bubble.appendChild(bodyEl);
-    }
+  if (event.target && !isReasoningEvent(event)) {
+    var targetNode = document.createElement("div");
+    targetNode.className = "event-target";
+    targetNode.textContent = event.target;
+    contentNode.appendChild(targetNode);
   }
-
-  if (!title && !body) {
-    bubble.textContent = eventBody(event);
+  if (event.body) {
+    var bodyNode = document.createElement(isReasoningEvent(event) ? "div" : "pre");
+    bodyNode.className = isReasoningEvent(event) ? "event-reasoning-body" : "event-body";
+    bodyNode.textContent = reasoningBodyText(event);
+    contentNode.appendChild(bodyNode);
   }
-
-  removeWorkingPlaceholder();
+  detailsNode.appendChild(contentNode);
+  bubble.appendChild(detailsNode);
   scrollToBottom();
   return node;
 }
 
-function shouldGroupEvent(event) {
-  return eventCategory(event) === "step";
-}
-
-function renderTraceEvent(event) {
-  var node = findActiveTraceNode();
-  if (!node) {
-    node = template.content.firstElementChild.cloneNode(true);
-    node.dataset.traceGroup = "status";
-    node.classList.remove(
-      "role-user",
-      "role-assistant",
-      "role-system",
-      "is-draft",
-      "is-streaming",
-      "is-working",
-      "is-event",
-      "event-status",
-      "event-command",
-      "event-generic"
-    );
-    node.classList.add("role-system", "is-event", "event-trace");
-    node.querySelector(".bubble").innerHTML = "<div class=\"event-trace-list\"></div><div class=\"event-trace-more\" hidden></div>";
-    timeline.appendChild(node);
-  }
-
-  node.querySelector(".bubble-meta").textContent = metaForTraceEvent(event);
-  appendTraceItem(node, event);
-  removeWorkingPlaceholder();
-  scrollToBottom();
-  return node;
-}
-
-function findActiveTraceNode() {
-  var node = timeline.lastElementChild;
-  if (!node) return null;
-  if (node.dataset && node.dataset.traceGroup === "status") {
-    return node;
-  }
-  return null;
-}
-
-function metaForTraceEvent(event) {
-  var time = formatTime(event && event.createdAt);
-  return time ? "trace · " + time : "trace";
-}
-
-function appendTraceItem(node, event) {
-  var list = node.querySelector(".event-trace-list");
-  if (!list) return;
-  var stepType = eventStepType(event);
-  var target = String((event && (event.target || event.body)) || "").trim();
-  var last = list.lastElementChild;
-  if (last && last.dataset && last.dataset.stepType === stepType) {
-    mergeTraceItem(last, target);
+function eventMeta(event) {
+  var labels = [];
+  if (isReasoningEvent(event)) {
+    labels.push("reasoning");
   } else {
-    list.appendChild(createTraceItem(stepType, target));
+    if (event.kind) labels.push(String(event.kind));
+    if (event.phase && event.phase !== "started") labels.push(String(event.phase));
   }
-  trimTraceItems(node, 4);
+  labels.push(formatTime(event.createdAt));
+  return labels.join(" · ");
 }
 
-function createTraceItem(stepType, target) {
-  var item = document.createElement("div");
-  item.className = "event-trace-item";
-  item.dataset.stepType = stepType;
-  item.dataset.count = "1";
-
-  var titleEl = document.createElement("span");
-  titleEl.className = "event-trace-title";
-  titleEl.textContent = traceStepLabel(stepType, 1);
-  item.appendChild(titleEl);
-
-  var bodyEl = document.createElement("span");
-  bodyEl.className = "event-trace-body";
-  bodyEl.textContent = target;
-  item.appendChild(bodyEl);
-
-  return item;
+function normalizeEventToken(value) {
+  return String(value || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
 }
 
-function mergeTraceItem(item, target) {
-  var count = Number(item.dataset.count || 1) + 1;
-  item.dataset.count = String(count);
-  var titleEl = item.querySelector(".event-trace-title");
-  if (titleEl) {
-    titleEl.textContent = traceStepLabel(item.dataset.stepType || "", count);
-  }
-  var bodyEl = item.querySelector(".event-trace-body");
-  if (!bodyEl) return;
-  var existing = String(bodyEl.textContent || "").trim();
-  if (!target) {
-    return;
-  }
-  if (!existing) {
-    bodyEl.textContent = target;
-    return;
-  }
-  if (existing.split(" • ").indexOf(target) !== -1) {
-    return;
-  }
-  var parts = existing.split(" • ").filter(Boolean);
-  parts.push(target);
-  if (parts.length > 3) {
-    parts.splice(0, parts.length - 3);
-  }
-  bodyEl.textContent = parts.join(" • ");
+function isReasoningEvent(event) {
+  var stepType = normalizeEventToken(event && event.stepType);
+  var title = normalizeEventToken(event && event.title);
+  var body = normalizeEventToken(event && event.body);
+  return stepType === "reasoning" || title === "reasoning" || body.indexOf("reasoning") === 0;
 }
 
-function traceStepLabel(stepType, count) {
-  var base = stepTypeLabel(stepType);
-  if (count > 1) {
-    return base + " ×" + count;
+function eventTitleText(event) {
+  if (isReasoningEvent(event)) {
+    return "思考中";
   }
-  return base;
+  return String(event && event.title || "");
 }
 
-function stepTypeLabel(stepType) {
-  switch (String(stepType || "").toLowerCase()) {
-    case "readfile":
-      return "read file";
-    case "writefile":
-      return "write file";
-    case "editfile":
-    case "patchfile":
-      return "edit file";
-    case "searchfiles":
-    case "glob":
-    case "findfiles":
-      return "find files";
-    case "grep":
-    case "searchtext":
-      return "search text";
-    case "openfile":
-    case "viewimage":
-      return "open file";
-    case "fetchurl":
-    case "openurl":
-      return "open url";
-    case "shellcommand":
-      return "shell";
-    case "listdir":
-    case "readdir":
-      return "list directory";
-    case "filechange":
-      return "file change";
-    case "websearch":
-      return "web search";
-    default:
-      return String(stepType || "step").replace(/_/g, " ");
+function reasoningBodyText(event) {
+  var text = String(event && event.body || "").trim();
+  if (!isReasoningEvent(event)) {
+    return text;
   }
-}
-
-function eventCategory(event) {
-  var category = String((event && event.category) || "").toLowerCase();
-  if (category) return category;
-  var kind = String((event && event.kind) || "").toLowerCase();
-  var title = String((event && event.title) || "").trim().toLowerCase();
-  if (kind === "command") return "command";
-  if (title.startsWith("task ")) return "task";
-  if (title.startsWith("turn ")) return "turn";
-  if (title.startsWith("thread ")) return "thread";
-  if (title.startsWith("review ")) return "review";
-  if (kind === "status") return "step";
-  return kind;
-}
-
-function eventStepType(event) {
-  var stepType = String((event && event.stepType) || "").toLowerCase();
-  if (stepType) return stepType.replace(/[\s_-]+/g, "");
-  var title = String((event && event.title) || "").trim().toLowerCase();
-  var body = String((event && event.body) || "").trim().toLowerCase();
-  return (body || title).replace(/[\s_-]+/g, "");
-}
-
-function trimTraceItems(node, limit) {
-  var list = node.querySelector(".event-trace-list");
-  var more = node.querySelector(".event-trace-more");
-  if (!list || !more) return;
-
-  var hiddenCount = Number(node.dataset.traceHiddenCount || 0);
-  while (list.children.length > limit) {
-    list.removeChild(list.firstElementChild);
-    hiddenCount += 1;
-  }
-
-  node.dataset.traceHiddenCount = String(hiddenCount);
-  if (hiddenCount > 0) {
-    more.hidden = false;
-    more.textContent = "+" + hiddenCount + " earlier steps";
-  } else {
-    more.hidden = true;
-    more.textContent = "";
-  }
-}
-
-function renderCommandEventBody(bubble, body) {
-  var parsed = parseCommandEventBody(body);
-  if (parsed.command) {
-    var commandEl = document.createElement("pre");
-    commandEl.className = "event-body event-body-command event-command-line";
-    commandEl.textContent = parsed.command;
-    bubble.appendChild(commandEl);
-  }
-
-  if (parsed.output) {
-    var detailsEl = document.createElement("details");
-    detailsEl.className = "event-command-output";
-    if (!parsed.collapsed) {
-      detailsEl.open = true;
-    }
-
-    var summaryEl = document.createElement("summary");
-    summaryEl.className = "event-command-summary";
-    summaryEl.textContent = parsed.collapsed ? "show output" : "output";
-    if (parsed.preview) {
-      var previewEl = document.createElement("span");
-      previewEl.className = "event-command-preview";
-      previewEl.textContent = parsed.preview;
-      summaryEl.appendChild(previewEl);
-    }
-    detailsEl.appendChild(summaryEl);
-
-    var outputEl = document.createElement("pre");
-    outputEl.className = "event-body event-body-command";
-    outputEl.textContent = parsed.output;
-    detailsEl.appendChild(outputEl);
-    bubble.appendChild(detailsEl);
-  }
-}
-
-function parseCommandEventBody(body) {
-  var text = String(body || "").trim();
   if (!text) {
-    return { command: "", output: "", preview: "", collapsed: false };
+    return "正在整理思路与下一步动作";
   }
-
-  var parts = text.split(/\n\s*\n/);
-  var command = String(parts.shift() || "").trim();
-  var output = String(parts.join("\n\n") || "").trim();
-  if (!output && text.includes("\n")) {
-    var lines = text.split("\n");
-    command = String(lines.shift() || "").trim();
-    output = String(lines.join("\n") || "").trim();
+  text = text.replace(/^reasoning\s*:?\s*/i, "").trim();
+  if (text.length > 160) {
+    text = text.slice(0, 160).trim() + "...";
   }
-
-  return {
-    command: command || text,
-    output: output,
-    preview: summarizeCommandOutput(output),
-    collapsed: output.length > 240 || output.split("\n").length > 8,
-  };
+  return text || "正在整理思路与下一步动作";
 }
 
-function summarizeCommandOutput(output) {
-  var text = String(output || "").trim();
-  if (!text) return "";
-  var lines = text.split("\n").map(function (line) {
-    return line.trim();
-  }).filter(Boolean);
-  if (!lines.length) return "";
-  var preview = lines.slice(0, 2).join(" | ");
-  if (preview.length > 96) {
-    preview = preview.slice(0, 96).trim() + "...";
-  } else if (lines.length > 2) {
-    preview += " ...";
+function eventSummaryText(event) {
+  var parts = [];
+  var title = String(eventTitleText(event) || "").trim();
+  var target = String(event && event.target || "").trim();
+  var body = String(reasoningBodyText(event) || "").trim();
+  if (title) {
+    parts.push(title);
   }
-  return preview;
+  if (target && !isReasoningEvent(event)) {
+    parts.push(target);
+  } else if (body) {
+    parts.push(body);
+  }
+  return compact(parts.join(" · ")) || "查看详情";
 }
 
-function metaForMessage(message) {
-  return formatTime(message.createdAt);
+function removeDraftMessages(finalID) {
+  Array.from(timeline.querySelectorAll(".bubble-row.is-draft")).forEach(function (node) {
+    if (finalID && node.dataset.messageId === finalID) return;
+    node.remove();
+  });
+}
+
+function showLoginScreen() {
+  isAuthenticated = false;
+  document.body.classList.add("auth-required");
+  loginScreen.hidden = false;
+  sessionChooser.hidden = true;
+  loginError.textContent = "";
+}
+
+function hideLoginScreen() {
+  isAuthenticated = true;
+  document.body.classList.remove("auth-required");
+  loginScreen.hidden = true;
+  loginError.textContent = "";
+  passwordInput.value = "";
+}
+
+function showSessionChooser() {
+  document.body.classList.add("auth-required");
+  sessionChooser.hidden = false;
+  resumeEmpty.hidden = true;
+}
+
+function hideSessionChooser() {
+  document.body.classList.remove("auth-required");
+  sessionChooser.hidden = true;
+  resumeEmpty.hidden = true;
+}
+
+function showSessionModal() {
+  if (!sessionModal) return;
+  sessionModal.hidden = false;
+}
+
+function hideSessionModal() {
+  if (!sessionModal) return;
+  sessionModal.hidden = true;
+}
+
+function showActionModal() {
+  if (!actionModal) return;
+  actionModal.hidden = false;
+}
+
+function hideActionModal() {
+  if (!actionModal) return;
+  actionModal.hidden = true;
+}
+
+function replaceTimeline(messages, events, draftMessage) {
+  timeline.innerHTML = "";
+  var items = [];
+  (messages || []).forEach(function (message) {
+    items.push({ kind: "message", createdAt: message.createdAt, value: message, order: items.length });
+  });
+  (events || []).forEach(function (event) {
+    items.push({ kind: "event", createdAt: event.createdAt, value: event, order: items.length });
+  });
+  items.sort(function (left, right) {
+    var leftTime = new Date(left.createdAt).getTime();
+    var rightTime = new Date(right.createdAt).getTime();
+    if (leftTime !== rightTime) {
+      return leftTime - rightTime;
+    }
+    var leftRank = timelineItemRank(left);
+    var rightRank = timelineItemRank(right);
+    if (leftRank !== rightRank) {
+      return leftRank - rightRank;
+    }
+    return Number(left.order || 0) - Number(right.order || 0);
+  });
+  if (!items.length && !draftMessage) {
+    renderEmpty();
+    return;
+  }
+  items.forEach(function (item) {
+    if (item.kind === "message") {
+      renderMessage(item.value);
+      return;
+    }
+    renderEvent(item.value);
+  });
+  if (draftMessage) {
+    renderMessage(draftMessage, { draft: true });
+  }
+}
+
+function timelineItemRank(item) {
+  if (!item || !item.value) return 9;
+  if (item.kind === "event") return 1;
+  var role = String(item.value.role || "").toLowerCase();
+  if (role === "user") return 0;
+  if (role === "assistant") return 2;
+  return 3;
+}
+
+function renderEmpty() {
+  timeline.innerHTML = '' +
+    '<div class="empty-state">' +
+      '<div class="empty-state-title">准备开始</div>' +
+      '<div class="empty-state-body">你可以给我分配一个任务，我会尽力完成它。</div>' +
+    '</div>';
 }
 
 function renderImages(node, imageUrls) {
@@ -465,78 +465,8 @@ function renderImages(node, imageUrls) {
   node.insertBefore(wrap, node.querySelector(".bubble"));
 }
 
-function revealBody(node, text, animated) {
-  var bubble = node.querySelector(".bubble");
-  if (!animated) {
-    bubble.textContent = text;
-    return;
-  }
-
-  var chunks = text.match(/.{1,22}(\s|$)|.+$/g) || [text];
-  var i = 0;
-  var key = node.dataset.messageId || crypto.randomUUID();
-  node.dataset.messageId = key;
-  var state = {
-    timer: null,
-    node: node,
-    target: text,
-    displayed: text,
-    mode: "reveal",
-  };
-
-  function step() {
-    bubble.textContent = chunks.slice(0, i + 1).join("");
-    scrollToBottom();
-    i += 1;
-    if (i < chunks.length) {
-      state.timer = setTimeout(step, 18);
-      streamStates.set(key, state);
-      return;
-    }
-    state.timer = null;
-    streamStates.set(key, state);
-  }
-
-  stopStream(node);
-  streamStates.set(key, state);
-  step();
-}
-
-function replaceTimeline(messages, events, draftMessage) {
-  timeline.innerHTML = "";
-  activeDraftId = "";
-  var items = [];
-  (messages || []).forEach(function (message) {
-    items.push({ kind: "message", createdAt: message.createdAt, value: message });
-  });
-  (events || []).forEach(function (event) {
-    items.push({ kind: "event", createdAt: event.createdAt, value: event });
-  });
-  items.sort(function (a, b) {
-    return new Date(a.createdAt) - new Date(b.createdAt);
-  });
-  if (!items.length) {
-    renderEmpty();
-  }
-  items.forEach(function (item) {
-    if (item.kind === "message") {
-      renderMessage(item.value, { animate: false });
-      return;
-    }
-    if (!shouldHideEvent(item.value) && eventBody(item.value)) {
-      renderEvent(item.value, { animate: false });
-    }
-  });
-  if (draftMessage) {
-    renderMessage(draftMessage, { draft: true, animate: false });
-  }
-}
-
-function renderEmpty() {
-  timeline.innerHTML = "";
-}
-
 function renderAttachmentTray() {
+  if (!attachmentTray || !attachmentTemplate) return;
   attachmentTray.innerHTML = "";
   attachmentTray.style.display = pendingImages.length ? "flex" : "none";
   pendingImages.forEach(function (item, index) {
@@ -552,104 +482,232 @@ function renderAttachmentTray() {
   });
 }
 
-function messageKey(message, options) {
-  var settings = options || {};
-  if (settings.draft) {
-    return message.id || ["draft", message.role, message.createdAt, message.content].join(":");
-  }
-  if (message.id && message.createdAt) {
-    return [message.id, message.createdAt].join(":");
-  }
-  return [message.id, message.role, message.createdAt, message.content].join(":");
-}
-
-function findMessageNode(id) {
-  return timeline.querySelector('.bubble-row[data-message-id="' + id + '"]');
-}
-
-function findDraftNode() {
-  return timeline.querySelector(".bubble-row.is-draft");
-}
-
-function removeOtherDrafts(finalId) {
-  timeline.querySelectorAll(".bubble-row.is-draft").forEach(function (node) {
-    node.remove();
-  });
-}
-
-function streamTo(node, targetText) {
-  var key = node.dataset.messageId || crypto.randomUUID();
-  node.dataset.messageId = key;
-  var bubble = node.querySelector(".bubble");
-  var previous = streamStates.get(key);
-
-  if (previous && previous.mode === "typing") {
-    previous.bubble = bubble;
-    previous.node = node;
-    previous.target = targetText;
-    streamStates.set(key, previous);
-    if (!previous.timer) {
-      scheduleStreamTick(key, previous);
-    }
-    return;
-  }
-
-  var state = {
-    node: node,
-    bubble: bubble,
-    mode: "typing",
-    displayed: bubble.textContent || "",
-    target: targetText,
-    timer: null,
-  };
-
-  streamStates.set(key, state);
-  scheduleStreamTick(key, state);
-}
-
-function stopStream(node) {
-  var key = node && node.dataset ? node.dataset.messageId : "";
-  if (!key) return;
-  var state = streamStates.get(key);
-  if (!state) return;
-  if (state.timer) clearTimeout(state.timer);
-  streamStates.delete(key);
-}
-
-function scheduleStreamTick(key, state) {
-  state.timer = setTimeout(function () {
-    tickStream(key);
-  }, 14);
-  streamStates.set(key, state);
-}
-
-function tickStream(key) {
-  var state = streamStates.get(key);
-  if (!state || !state.node || !document.body.contains(state.node)) {
-    streamStates.delete(key);
-    return;
-  }
-
-  if (state.displayed === state.target) {
-    state.timer = null;
-    streamStates.set(key, state);
-    return;
-  }
-
-  if (!state.target.startsWith(state.displayed)) {
-    state.displayed = "";
-  }
-
-  var nextLength = Math.min(state.displayed.length + 1, state.target.length);
-  state.displayed = state.target.slice(0, nextLength);
-  state.bubble.textContent = state.displayed;
-  scrollToBottom();
-  scheduleStreamTick(key, state);
-}
-
 function scrollToBottom() {
   requestAnimationFrame(function () {
-    window.scrollTo(0, document.body.scrollHeight);
     timeline.scrollTop = timeline.scrollHeight;
   });
+}
+
+function setFooterStatus(state, detail) {
+  setNodeText(footerState, String(state || "ready"));
+  if (detail != null) {
+    setNodeText(footerDetail, String(detail));
+  }
+}
+
+function connectionStateCopy(state) {
+  switch (String(state || "").toLowerCase()) {
+    case "connecting":
+      return { badge: "link", title: "正在建立连接", detail: "正在与当前会话建立实时通道。" };
+    case "reconnecting":
+      return { badge: "retry", title: "正在恢复连接", detail: "实时连接已断开，系统会自动重试。" };
+    case "error":
+      return { badge: "error", title: "连接异常", detail: "实时通道暂不可用，可稍后重试。" };
+    default:
+      return { badge: "live", title: "连接正常", detail: "实时消息会显示在这里。" };
+  }
+}
+
+function setConnectionBanner(state, detail) {
+  if (!connectionBanner) return;
+  var next = connectionStateCopy(state);
+  var current = String(state || "connected").toLowerCase();
+  connectionBanner.hidden = current === "connected";
+  connectionBadge.textContent = next.badge;
+  connectionTitle.textContent = next.title;
+  connectionDetail.textContent = String(detail || next.detail || "").trim();
+}
+
+function setTransportState(state) {
+  setNodeText(transportBadge, state);
+  setNodeText(desktopTransportBadge, state);
+  setNodeText(statusTransport, state);
+  setConnectionBanner(state);
+  if (!isRunning) {
+    setFooterStatus(state === "connected" ? "ready" : state, transportDetail(state));
+  }
+}
+
+function setTaskState(running) {
+  isRunning = Boolean(running);
+  if (imageBtn) imageBtn.disabled = isRunning;
+  if (modelSelect) modelSelect.disabled = isRunning;
+  sendBtn.disabled = isRunning || !String(input.value || "").trim();
+  setNodeText(statusTask, isRunning ? "running" : "idle");
+  if (isRunning) {
+    setFooterStatus("working", providerDisplayName() + " 正在生成");
+  } else if (String(statusTransport.textContent || "") === "connected") {
+    setFooterStatus("ready", "等待输入");
+  }
+}
+
+function setSession(id) {
+  currentSessionId = id;
+  localStorage.setItem("sessionId", id);
+  setNodeText(sessionBadge, shortSession(id));
+  setNodeText(desktopSessionBadge, shortSession(id));
+  setNodeText(statusSession, shortSession(id));
+  if (sessionBadge) sessionBadge.title = fullSession(id);
+  if (desktopSessionBadge) desktopSessionBadge.title = fullSession(id);
+  if (statusSession) statusSession.title = fullSession(id);
+}
+
+function setMeta(meta) {
+  if (!meta) return;
+  if (meta.provider) setCurrentProvider(meta.provider);
+  if (meta.model) {
+    setNodeText(modelBadge, meta.model);
+    setNodeText(statusModel, meta.model);
+    populateModelSelect(meta.provider || currentProvider, meta.model);
+  }
+  if (meta.cwd) {
+    setNodeText(cwdBadge, meta.cwd);
+    setNodeText(statusCwd, meta.cwd);
+  }
+}
+
+function applyBuildInfo() {
+  var config = appConfig();
+  var version = String(config.version || "dev").trim() || "dev";
+  if (version.charAt(0) !== "v") {
+    version = "v" + version;
+  }
+  document.title = String(config.appName || "Code Web").trim() || "Code Web";
+  Array.from(appTitleNodes || []).forEach(function (node) {
+    node.textContent = String(config.appName || "Code Web").trim() || "Code Web";
+  });
+  Array.from(versionNodes || []).forEach(function (node) {
+    node.textContent = version;
+  });
+  populateProviderSelect();
+  setCurrentProvider(currentProvider);
+}
+
+function showError(message) {
+  var text = compact(message || "操作失败");
+  setFooterStatus("error", text);
+  if (!errorToast) return;
+  errorToast.textContent = text;
+  errorToast.hidden = false;
+  clearTimeout(errorToastTimer);
+  errorToastTimer = setTimeout(function () {
+    errorToast.hidden = true;
+  }, 3200);
+}
+
+function autoResize() {
+  input.style.height = "auto";
+  input.style.height = Math.min(input.scrollHeight, 132) + "px";
+}
+
+function updateSendState() {
+  var hasContent = String(input.value || "").trim().length > 0;
+  var hasImages = pendingImages.length > 0;
+  sendBtn.disabled = isRunning || (!hasContent && !hasImages);
+}
+
+function canAcceptImageFile(file) {
+  return Boolean(file && typeof file.type === "string" && file.type.toLowerCase().startsWith("image/"));
+}
+
+function addPendingImageFiles(files) {
+  var added = false;
+  (files || []).forEach(function (file) {
+    if (!canAcceptImageFile(file)) return;
+    pendingImages.push({
+      file: file,
+      url: URL.createObjectURL(file)
+    });
+    added = true;
+  });
+  if (!added) {
+    return false;
+  }
+  renderAttachmentTray();
+  updateSendState();
+  return true;
+}
+
+function transportDetail(state) {
+  if (state === "connected") return "等待输入";
+  if (state === "connecting") return "正在建立连接";
+  if (state === "reconnecting") return "正在恢复连接";
+  return "连接不可用";
+}
+
+function renderResumeList(items, options) {
+  var settings = options || {};
+  if (!resumeList) return;
+  resumeList.innerHTML = "";
+  (items || []).forEach(function (item) {
+    var row = document.createElement("div");
+    row.className = "resume-item";
+
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "resume-open";
+
+    var title = document.createElement("div");
+    title.className = "resume-item-title";
+    title.textContent = item.title || shortSession(item.id);
+    button.appendChild(title);
+
+    var meta = document.createElement("div");
+    meta.className = "resume-item-meta";
+    resumeBadges(item).forEach(function (badge) {
+      var chip = document.createElement("span");
+      chip.className = badge.className;
+      chip.textContent = badge.text;
+      meta.appendChild(chip);
+    });
+    button.appendChild(meta);
+
+    var desc = document.createElement("div");
+    desc.className = "resume-item-desc";
+    desc.textContent = [String(item.provider || "").toUpperCase(), compact(item.workdir || item.lastMessage || item.lastEvent || "")].filter(Boolean).join(" · ");
+    button.appendChild(desc);
+
+    var summary = document.createElement("div");
+    summary.className = "resume-item-summary";
+    summary.textContent = [
+      item.updatedAt ? "更新 " + formatTime(item.updatedAt) : "",
+      typeof item.messageCount === "number" ? "消息 " + item.messageCount : ""
+    ].filter(Boolean).join(" · ");
+    button.appendChild(summary);
+
+    button.addEventListener("click", async function () {
+      if (typeof settings.onOpen === "function") {
+        await settings.onOpen(item, button);
+      }
+    });
+
+    var actions = document.createElement("div");
+    actions.className = "resume-actions";
+    var deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "resume-delete";
+    deleteBtn.textContent = "删除";
+    deleteBtn.addEventListener("click", async function (evt) {
+      evt.stopPropagation();
+      if (typeof settings.onDelete === "function") {
+        await settings.onDelete(item, row);
+      }
+    });
+    actions.appendChild(deleteBtn);
+
+    row.appendChild(button);
+    row.appendChild(actions);
+    resumeList.appendChild(row);
+  });
+}
+
+function resumeBadges(item) {
+  var badges = [];
+  badges.push({ text: item && item.restoreRef ? "历史会话" : "当前会话", className: "resume-badge" });
+  if (item && item.running) {
+    badges.push({ text: "运行中", className: "resume-badge is-running" });
+  } else {
+    badges.push({ text: "空闲", className: "resume-badge is-idle" });
+  }
+  return badges;
 }

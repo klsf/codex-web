@@ -2,136 +2,76 @@ package main
 
 import (
 	"context"
+	"embed"
 	"errors"
 	"flag"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 )
 
+//go:embed static
+var embeddedStatic embed.FS
+
 func main() {
-	passwordFlag := flag.String("password", "codex", "login password for Code Web")
+	passwordFlag := flag.String("password", "codex", "login password for Code Web New")
 	flag.Parse()
 
-	availableProviders = detectAvailableProviders()
-	activeProvider = selectDefaultProvider(availableProviders)
-	if _, ok := availableProviders[activeProvider.ID()]; !ok {
-		log.Fatalf("%s is not available on this machine", activeProvider.DisplayName())
-	}
-
-	workdir, err := os.Getwd()
+	staticFS, err := fs.Sub(embeddedStatic, "static")
 	if err != nil {
-		log.Fatalf("detect app workdir: %v", err)
+		log.Fatalf("init static fs: %v", err)
 	}
-	defaultWorkdir = filepath.Clean(workdir)
-
-	if err := os.MkdirAll(uploadsDir, 0o755); err != nil {
-		log.Fatalf("create upload dir: %v", err)
-	}
-	if err := os.MkdirAll(logsDir, 0o755); err != nil {
-		log.Fatalf("create log dir: %v", err)
-	}
-	if err := ensureProviderAvailable(); err != nil {
-		if activeProvider.RequiresAuth() {
-			log.Fatalf("%v; also make sure `%s login` has been completed on this machine", err, activeProvider.Executable())
-		}
-		log.Fatal(err)
+	if err := ensureUploadsDir(); err != nil {
+		log.Fatalf("init uploads dir: %v", err)
 	}
 
-	store := &sessionStore{
-		sessions:      make(map[string]*sessionRuntime),
-		auth:          newCodexAuthManager(),
-		accountStatus: make(map[string]cachedAccountStatus),
-		meta: appMeta{
-			Provider:       activeProvider.ID(),
-			Model:          detectCodexModel(),
-			Cwd:            defaultWorkdir,
-			ApprovalPolicy: "never",
-			ServiceTier:    detectServiceTier(),
-		},
-		authToken: authTokenForPassword(*passwordFlag),
-	}
-	store.meta.Model = defaultModelForProvider()
-	store.meta.FastMode = strings.EqualFold(store.meta.ServiceTier, "fast")
-	store.maxConcurrent = detectTaskConcurrency()
-	store.taskSlots = make(chan struct{}, store.maxConcurrent)
-
-	if err := activeProvider.Start(store); err != nil {
-		log.Fatal(err)
-	}
-	defer activeProvider.Close()
+	store := newSessionStore(*passwordFlag)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", store.handleIndex)
-	mux.Handle("/app/", staticAssetsHandler("static"))
-	mux.Handle("/style.css", staticAssetsHandler("static"))
-	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadsDir))))
+	mux.HandleFunc("/", store.handleIndex(staticFS))
+	mux.Handle("/app/", withCache(http.FileServer(http.FS(staticFS))))
+	mux.Handle("/style.css", withCache(http.FileServer(http.FS(staticFS))))
+	mux.Handle("/uploads/", withCache(http.StripPrefix("/uploads/", http.FileServer(http.Dir(uploadsDir)))))
 	mux.HandleFunc("/app-config.js", store.handleAppConfig)
-	mux.HandleFunc("/ws", store.handleWS)
 	mux.HandleFunc("/api/login", store.handleLogin)
 	mux.HandleFunc("/api/auth", store.handleAuth)
 	mux.HandleFunc("/api/logout", store.handleLogout)
-	mux.HandleFunc("/api/session/new", store.handleNewSession)
-	mux.HandleFunc("/api/session/restore", store.handleRestoreSession)
-	mux.HandleFunc("/api/send", store.handleSend)
-	mux.HandleFunc("/api/command", store.handleCommand)
-	mux.HandleFunc("/api/status", store.handleStatus)
-	mux.HandleFunc("/api/models", store.handleModels)
-	mux.HandleFunc("/api/skills", store.handleSkills)
 	mux.HandleFunc("/api/sessions", store.handleSessions)
-	if _, ok := availableProviders[providerCodex]; ok {
-		mux.HandleFunc("/codex-auth", store.handleCodexAuthPage)
-		mux.HandleFunc("/auth/callback", store.handleCodexAuthCallback)
-		mux.HandleFunc("/api/codex-auth/status", store.handleCodexAuthStatus)
-		mux.HandleFunc("/api/codex-auth/start", store.handleCodexAuthStart)
-		mux.HandleFunc("/api/codex-auth/complete", store.handleCodexAuthComplete)
-	}
+	mux.HandleFunc("/api/session/restore", store.handleRestoreSession)
+	mux.HandleFunc("/api/session/delete", store.handleDeleteSession)
+	mux.HandleFunc("/api/session/new", store.handleNewSession)
+	mux.HandleFunc("/api/send", store.handleSend)
+	mux.HandleFunc("/api/status", store.handleStatus)
+	mux.HandleFunc("/ws", store.handleWS)
 
 	server := &http.Server{
-		Addr:    addr,
+		Addr:    ":8080",
 		Handler: store.withAuth(mux),
 	}
-	serverErr := make(chan error, 1)
+
 	go func() {
-		err := server.ListenAndServe()
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			serverErr <- err
+		log.Printf("Code Web New listening on http://127.0.0.1%s", server.Addr)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("listen: %v", err)
 		}
-		close(serverErr)
 	}()
 
-	shutdownSignals := []os.Signal{os.Interrupt, syscall.SIGTERM}
-	ctx, stop := signal.NotifyContext(context.Background(), shutdownSignals...)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
-	appLog.Info().Str("addr", addr).Msg("server listening")
-	appLog.Info().
-		Str("provider", activeProvider.ID()).
-		Str("executable", activeProvider.Executable()).
-		Msg("provider info")
-	appLog.Info().Int("concurrency", store.maxConcurrent).Msg("task concurrency limit")
-	select {
-	case err := <-serverErr:
-		if err == nil {
-			return
-		}
-		log.Fatal(err)
-	case <-ctx.Done():
-	}
-
-	appLog.Warn().Msg("shutdown signal received, stopping services")
+	<-ctx.Done()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		appLog.Warn().Err(err).Msg("http shutdown failed")
-		if closeErr := server.Close(); closeErr != nil && !errors.Is(closeErr, http.ErrServerClosed) {
-			appLog.Error().Err(closeErr).Msg("force close http server failed")
-		}
-	}
+	_ = server.Shutdown(shutdownCtx)
+}
+
+func withCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-cache, max-age=0")
+		next.ServeHTTP(w, r)
+	})
 }
