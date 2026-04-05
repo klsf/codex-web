@@ -85,32 +85,6 @@ Example `config.json`:
 }
 ```
 
-Example `claude-settings.json`:
-
-```json
-{
-  "env": {
-    "ANTHROPIC_AUTH_TOKEN": "ms-******-ba92-4416-*****-d93c1124a9f9",
-    "ANTHROPIC_BASE_URL": "https://api-inference.modelscope.cn",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "ZhipuAI/GLM-5",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "ZhipuAI/GLM-5",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "ZhipuAI/GLM-5",
-    "ANTHROPIC_MODEL": "ZhipuAI/GLM-5"
-  }
-}
-```
-
-Example `codex-settings.json`:
-
-```json
-{
-  "env": {
-    "HTTP_PROXY": "http://127.0.0.1:10808",
-    "HTTPS_PROXY": "http://127.0.0.1:10808"
-  }
-}
-```
-
 ## Start
 
 ```bash

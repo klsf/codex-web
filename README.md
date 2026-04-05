@@ -6,7 +6,7 @@
 
 <p align="center">
   <img alt="Go Version" src="https://img.shields.io/badge/Go-1.22%2B-00ADD8?logo=go&logoColor=white">
-  <img alt="Version" src="https://img.shields.io/badge/version-v1.2.0-111827">
+  <img alt="Version" src="https://img.shields.io/badge/version-v1.2.1-111827">
   <img alt="GitHub Repo stars" src="https://img.shields.io/github/stars/klsf/code-web?style=social">
 </p>
 `Code Web` 是一个基于 `Go + HTML + WebSocket` 构建的代码助手 Web UI，目前支持 `Codex` 和 `Claude`。
@@ -81,32 +81,6 @@
       "models": ["gpt-5.4", "gpt-5.3-codex", "gpt-5.4-mini"]
     }
   ]
-}
-```
-
-示例 `claude-settings.json`：
-
-```json
-{
-  "env": {
-    "ANTHROPIC_AUTH_TOKEN": "ms-******-ba92-4416-*****-d93c1124a9f9",
-    "ANTHROPIC_BASE_URL": "https://api-inference.modelscope.cn",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "ZhipuAI/GLM-5",
-    "ANTHROPIC_DEFAULT_OPUS_MODEL": "ZhipuAI/GLM-5",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "ZhipuAI/GLM-5",
-    "ANTHROPIC_MODEL": "ZhipuAI/GLM-5"
-  }
-}
-```
-
-示例 `codex-settings.json`：
-
-```json
-{
-  "env": {
-    "HTTP_PROXY": "http://127.0.0.1:10808",
-    "HTTPS_PROXY": "http://127.0.0.1:10808"
-  }
 }
 ```
 
